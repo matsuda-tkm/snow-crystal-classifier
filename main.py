@@ -1,35 +1,23 @@
+"""
+OpenCV特徴量ベース雪晶分類器のクロスバリデーション評価
+
+霰(graupel)と雪片(snowflake)をRandomForestで分類し、
+クロスバリデーションで評価する
+"""
+
 import argparse
 from pathlib import Path
-from dataclasses import dataclass
 
 import cv2
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
-
-from classifier import SnowCrystalClassifier
-
-console = Console()
 
 
-@dataclass
-class Metrics:
-    """評価メトリクス"""
-    accuracy: float
-    precision: float
-    recall: float
-    f1: float
-    confusion_matrix: np.ndarray
 
-
-def resize_with_padding(image: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
+def resize_with_padding(image, target_size):
     """アスペクト比を維持しながらパディングでサイズを揃える"""
     h, w = image.shape[:2]
     target_h, target_w = target_size
@@ -43,7 +31,7 @@ def resize_with_padding(image: np.ndarray, target_size: tuple[int, int]) -> np.n
     return padded
 
 
-def load_dataset(data_dir: Path, image_size: tuple[int, int]) -> tuple[np.ndarray, np.ndarray, list[str]]:
+def load_dataset(data_dir, image_size):
     """データセットを読み込む"""
     class_names = ["graupel", "snowflake"]
     images, labels = [], []
@@ -60,86 +48,81 @@ def load_dataset(data_dir: Path, image_size: tuple[int, int]) -> tuple[np.ndarra
     return np.array(images), np.array(labels), class_names
 
 
-def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Metrics:
-    """評価メトリクスを計算する"""
-    return Metrics(
-        accuracy=accuracy_score(y_true, y_pred),
-        precision=precision_score(y_true, y_pred, average="macro", zero_division=0),  # type: ignore[arg-type]
-        recall=recall_score(y_true, y_pred, average="macro", zero_division=0),  # type: ignore[arg-type]
-        f1=f1_score(y_true, y_pred, average="macro", zero_division=0),  # type: ignore[arg-type]
-        confusion_matrix=confusion_matrix(y_true, y_pred),
-    )
+def compute_metrics(y_true, y_pred):
+    """
+    評価メトリクスを計算する
 
-
-def run_cross_validation(
-    X: np.ndarray,
-    y: np.ndarray,
-    n_folds: int = 5,
-    random_seed: int = 42,
-) -> tuple[Metrics, dict]:
-    """クロスバリデーションを実行する"""
-    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_seed)
-    fold_metrics = []
-    all_preds, all_labels = [], []
-
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TaskProgressColumn(),
-        console=console,
-    ) as progress:
-        task = progress.add_task("[cyan]Cross Validation", total=n_folds)
-
-        for fold_idx, (train_idx, test_idx) in enumerate(skf.split(X, y)):
-            clf = SnowCrystalClassifier(random_state=random_seed)
-            clf.fit(X[train_idx], y[train_idx])
-            y_pred = clf.predict(X[test_idx])
-
-            metrics = compute_metrics(y[test_idx], y_pred)
-            fold_metrics.append(metrics)
-            all_preds.extend(y_pred)
-            all_labels.extend(y[test_idx])
-
-            progress.update(task, advance=1, description=f"[cyan]Fold {fold_idx + 1}/{n_folds} - Acc: {metrics.accuracy:.4f}, F1: {metrics.f1:.4f}")
-
-    # 平均と標準偏差を計算
-    mean_metrics = Metrics(
-        accuracy=float(np.mean([m.accuracy for m in fold_metrics])),
-        precision=float(np.mean([m.precision for m in fold_metrics])),
-        recall=float(np.mean([m.recall for m in fold_metrics])),
-        f1=float(np.mean([m.f1 for m in fold_metrics])),
-        confusion_matrix=confusion_matrix(all_labels, all_preds),
-    )
-    std_metrics = {
-        "accuracy": np.std([m.accuracy for m in fold_metrics]),
-        "precision": np.std([m.precision for m in fold_metrics]),
-        "recall": np.std([m.recall for m in fold_metrics]),
-        "f1": np.std([m.f1 for m in fold_metrics]),
+    戻り値:
+        metrics: 評価指標を格納した辞書
+            - "accuracy": 正解率
+            - "precision": 適合率
+            - "recall": 再現率
+            - "f1": F1スコア
+            - "confusion_matrix": 混同行列
+    """
+    return {
+        "accuracy": accuracy_score(y_true, y_pred),
+        "precision": precision_score(y_true, y_pred, average="macro"),
+        "recall": recall_score(y_true, y_pred, average="macro"),
+        "f1": f1_score(y_true, y_pred, average="macro"),
+        "confusion_matrix": confusion_matrix(y_true, y_pred),
     }
-    return mean_metrics, std_metrics
 
 
-def plot_confusion_matrix(metrics: Metrics, class_names: list[str], output_path: Path) -> None:
+def run_cross_validation(X, y, n_folds=5, random_seed=42):
+    """
+    クロスバリデーションを実行する
+
+    Args:
+        X: 画像データ (N, H, W, C)
+        y: ラベル (N,)
+        n_folds: 分割数
+        random_seed: 乱数シード
+
+    処理の流れ:
+        1. StratifiedKFoldでデータをn_folds個に分割
+        2. 各Foldで: 訓練データで学習 → テストデータで予測 → 評価
+        3. 全Foldの結果を集計
+
+    戻り値:
+        mean_metrics: 平均評価指標 (dict)
+        std_metrics: 標準偏差 (dict)
+    """
+    # ========================================
+    # TODO: クロスバリデーションを実装してください
+    # ========================================
+    # ヒント:
+    # - StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_seed)
+    # - skf.split(X, y) で (train_idx, test_idx) のペアが得られる
+    # - X[train_idx], y[train_idx] で訓練データを取得
+    # - SnowCrystalClassifier(random_state=random_seed) で分類器を作成
+    # - clf.fit(X_train, y_train) で訓練
+    # - clf.predict(X_test) で予測
+    # - compute_metrics(y_test, y_pred) で評価
+
+    raise NotImplementedError("この関数を実装してください")
+
+
+def plot_confusion_matrix(metrics, class_names, output_path):
     """混同行列をプロットする"""
     fig, ax = plt.subplots(figsize=(6, 5))
     sns.heatmap(
-        metrics.confusion_matrix, annot=True, fmt="d", cmap="Blues",
+        metrics["confusion_matrix"], annot=True, fmt="d", cmap="Blues",
         xticklabels=class_names, yticklabels=class_names, ax=ax
     )
-    ax.set_title(f"Confusion Matrix (Accuracy: {metrics.accuracy:.3f})")
+    ax.set_title(f"Confusion Matrix (Accuracy: {metrics['accuracy']:.3f})")
     ax.set_xlabel("Predicted")
     ax.set_ylabel("True")
     plt.tight_layout()
     plt.savefig(output_path, dpi=150)
     plt.close()
-    console.print(f"  [green]✓[/green] Saved: [cyan]{output_path}[/cyan]")
+    print(f"  Saved: {output_path}")
 
 
-def plot_metrics(metrics: Metrics, std: dict, output_path: Path) -> None:
+def plot_metrics(metrics, std, output_path):
     """メトリクスをプロットする"""
     names = ["Accuracy", "Precision", "Recall", "F1"]
-    values = [metrics.accuracy, metrics.precision, metrics.recall, metrics.f1]
+    values = [metrics["accuracy"], metrics["precision"], metrics["recall"], metrics["f1"]]
     errors = [std["accuracy"], std["precision"], std["recall"], std["f1"]]
     colors = ["#2ecc71", "#3498db", "#e74c3c", "#9b59b6"]
 
@@ -157,64 +140,58 @@ def plot_metrics(metrics: Metrics, std: dict, output_path: Path) -> None:
     plt.tight_layout()
     plt.savefig(output_path, dpi=150)
     plt.close()
-    console.print(f"  [green]✓[/green] Saved: [cyan]{output_path}[/cyan]")
+    print(f"  Saved: {output_path}")
 
 
-def save_results_csv(metrics: Metrics, std: dict, output_path: Path) -> None:
+def save_results_csv(metrics, std, output_path):
     """結果をCSVに保存する"""
     df = pd.DataFrame([{
-        "accuracy_mean": metrics.accuracy,
+        "accuracy_mean": metrics["accuracy"],
         "accuracy_std": std["accuracy"],
-        "precision_mean": metrics.precision,
+        "precision_mean": metrics["precision"],
         "precision_std": std["precision"],
-        "recall_mean": metrics.recall,
+        "recall_mean": metrics["recall"],
         "recall_std": std["recall"],
-        "f1_mean": metrics.f1,
+        "f1_mean": metrics["f1"],
         "f1_std": std["f1"],
     }])
     df.to_csv(output_path, index=False)
-    console.print(f"  [green]✓[/green] Saved: [cyan]{output_path}[/cyan]")
+    print(f"  Saved: {output_path}")
 
 
-def main(data_dir: Path, output_dir: Path, n_folds: int, image_size: int, seed: int) -> None:
+def main(data_dir, output_dir, n_folds, image_size, seed):
     """メイン関数"""
-    console.print(Panel.fit(
-        "[bold cyan]OpenCV特徴量ベース雪晶分類器（RandomForest）[/bold cyan]",
-        border_style="cyan"
-    ))
+    print("=" * 60)
+    print("OpenCV特徴量ベース雪晶分類器（RandomForest）")
+    print("=" * 60)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # データ読み込み
-    console.print("\n[bold yellow]Loading data...[/bold yellow]")
+    print("\nLoading data...")
     X, y, class_names = load_dataset(data_dir, (image_size, image_size))
-    console.print(f"  Samples: [green]{len(X)}[/green], Classes: {dict(zip(class_names, np.bincount(y)))}")
+    print(f"  Samples: {len(X)}, Classes: {dict(zip(class_names, np.bincount(y)))}")
 
     # クロスバリデーション
-    console.print(f"\n[bold yellow]Running {n_folds}-fold cross validation...[/bold yellow]")
+    print(f"\nRunning {n_folds}-fold cross validation...")
     metrics, std = run_cross_validation(X, y, n_folds, seed)
 
     # 結果表示
-    results_table = Table(title="Results", show_header=True, header_style="bold magenta")
-    results_table.add_column("Metric", style="cyan")
-    results_table.add_column("Mean", justify="right", style="green")
-    results_table.add_column("Std", justify="right", style="yellow")
-
-    results_table.add_row("Accuracy", f"{metrics.accuracy:.4f}", f"± {std['accuracy']:.4f}")
-    results_table.add_row("Precision", f"{metrics.precision:.4f}", f"± {std['precision']:.4f}")
-    results_table.add_row("Recall", f"{metrics.recall:.4f}", f"± {std['recall']:.4f}")
-    results_table.add_row("F1", f"{metrics.f1:.4f}", f"± {std['f1']:.4f}")
-
-    console.print()
-    console.print(results_table)
+    print("\n" + "=" * 60)
+    print("Results")
+    print("=" * 60)
+    print(f"  Accuracy:  {metrics['accuracy']:.4f} +/- {std['accuracy']:.4f}")
+    print(f"  Precision: {metrics['precision']:.4f} +/- {std['precision']:.4f}")
+    print(f"  Recall:    {metrics['recall']:.4f} +/- {std['recall']:.4f}")
+    print(f"  F1:        {metrics['f1']:.4f} +/- {std['f1']:.4f}")
 
     # 保存
-    console.print("\n[bold yellow]Saving results...[/bold yellow]")
+    print("\nSaving results...")
     plot_confusion_matrix(metrics, class_names, output_dir / "confusion_matrix.png")
     plot_metrics(metrics, std, output_dir / "metrics.png")
     save_results_csv(metrics, std, output_dir / "results.csv")
 
-    console.print("\n[bold green]✓ Done![/bold green]")
+    print("\nDone!")
 
 
 if __name__ == "__main__":
