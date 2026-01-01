@@ -125,17 +125,75 @@ class SnowCrystalClassifier:
             features.extend(hu.tolist())
 
         # ========================================
-        # TODO: 追加の特徴量を実装してください
+        # テクスチャ特徴量（LBP + Gabor）
         # ========================================
-        # OpenCVのドキュメントを参照し、画像から特徴量を抽出してください
-        # 参考: https://docs.opencv.org/4.x/
-        #
-        # 例:
-        # - エッジ検出 (Canny, Sobel, Laplacian)
-        # - フィルタ処理 (blur, GaussianBlur, filter2D)
-        # - ヒストグラム (calcHist)
-        # - その他の画像処理関数
-        #
-        # 抽出した特徴量は features.extend([...]) で追加してください
+        # LBP (Local Binary Pattern): 局所的なテクスチャパターンを捉える
+        # 各ピクセルの周囲8近傍と比較し、パターンをエンコード
+        padded = cv2.copyMakeBorder(gray, 1, 1, 1, 1, cv2.BORDER_REFLECT)
+        h, w = gray.shape
+        lbp = np.zeros((h, w), dtype=np.uint8)
+        for i in range(8):
+            angle = i * np.pi / 4
+            dy, dx = int(np.round(np.sin(angle))), int(np.round(np.cos(angle)))
+            neighbor = padded[1 + dy:h + 1 + dy, 1 + dx:w + 1 + dx]
+            lbp += ((neighbor >= gray).astype(np.uint8) << i)
+        # LBPヒストグラム（16ビンに正規化）
+        hist, _ = np.histogram(lbp.ravel(), bins=16, range=(0, 256))
+        features.extend((hist / (hist.sum() + 1e-7)).tolist())
+
+        # Gaborフィルタ: 異なる方向・スケールのテクスチャを検出
+        for theta in [0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]:
+            for sigma in [3.0, 5.0]:
+                kernel = cv2.getGaborKernel((21, 21), sigma, theta, 10.0, 0.5, 0)
+                filtered = cv2.filter2D(gray, cv2.CV_64F, kernel)
+                features.extend([filtered.mean(), filtered.std()])
+
+        # ========================================
+        # エッジ特徴量
+        # ========================================
+        # Cannyエッジ検出: エッジの密度を計算
+        edges = cv2.Canny(gray, 50, 150)
+        edge_density = edges.sum() / (edges.shape[0] * edges.shape[1] * 255)
+
+        # Sobelフィルタ: 勾配の強度と方向
+        sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+        sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+        gradient = np.sqrt(sobel_x ** 2 + sobel_y ** 2)
+        direction = np.arctan2(sobel_y, sobel_x)
+
+        # 勾配方向のヒストグラム（8方向）
+        dir_hist, _ = np.histogram(direction.ravel(), bins=8, range=(-np.pi, np.pi))
+        dir_hist = dir_hist / (dir_hist.sum() + 1e-7)
+
+        # Laplacian: エッジの鮮明さ（分散が大きいほど鮮明）
+        laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var() / 1000
+
+        features.extend([edge_density, gradient.mean(), gradient.std(), laplacian_var])
+        features.extend(dir_hist.tolist())
+
+        # ========================================
+        # 統計的特徴量
+        # ========================================
+        # 基本統計量
+        mean, std = gray.mean(), gray.std()
+
+        # エントロピー（情報量の尺度）
+        hist, _ = np.histogram(gray.ravel(), bins=256, range=(0, 256))
+        hist = hist / (hist.sum() + 1e-7)
+        entropy = -np.sum(hist * np.log2(hist + 1e-7))
+
+        # 歪度と尖度（分布の形状）
+        centered = gray.astype(np.float64) - mean
+        skewness = np.mean(centered ** 3) / (std ** 3 + 1e-7)
+        kurtosis = np.mean(centered ** 4) / (std ** 4 + 1e-7) - 3
+
+        # パーセンタイル
+        percentiles = np.percentile(gray.ravel(), [10, 25, 50, 75, 90]) / 255
+
+        features.extend([
+            mean / 255, std / 255, (gray.max() - gray.min()) / 255,
+            entropy / 8, skewness, kurtosis
+        ])
+        features.extend(percentiles.tolist())
 
         return np.array(features)

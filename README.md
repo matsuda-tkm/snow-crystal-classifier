@@ -19,6 +19,56 @@
 参考:
 - scikit-learn StratifiedKFold: https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedKFold.html
 
+<details>
+<summary>💡 解答例と解説（クリックで展開）</summary>
+
+#### 実装のポイント
+
+```python
+def run_cross_validation(X, y, n_folds=5, random_seed=42):
+    # 1. StratifiedKFoldでデータを分割
+    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_seed)
+    
+    fold_metrics = []  # 各Foldの評価結果
+    all_preds = []     # 全予測結果（混同行列用）
+    all_labels = []
+    
+    # 2. 各Foldで訓練と評価
+    for fold_idx, (train_idx, test_idx) in enumerate(skf.split(X, y)):
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+        
+        clf = SnowCrystalClassifier(random_state=random_seed)
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_test)
+        
+        metrics = compute_metrics(y_test, y_pred)
+        fold_metrics.append(metrics)
+        all_preds.extend(y_pred)
+        all_labels.extend(y_test)
+    
+    # 3. 平均と標準偏差を計算
+    mean_metrics = {
+        "accuracy": np.mean([m["accuracy"] for m in fold_metrics]),
+        # ... 他の指標も同様
+    }
+    std_metrics = {
+        "accuracy": np.std([m["accuracy"] for m in fold_metrics]),
+        # ...
+    }
+    return mean_metrics, std_metrics
+```
+
+#### 解説
+
+1. **StratifiedKFold**: `shuffle=True`でデータをシャッフルし、`random_state`で再現性を確保します。`split(X, y)`は訓練用とテスト用のインデックスを返します。
+
+2. **各Foldでの処理**: インデックスを使って`X[train_idx]`のようにデータを分割し、分類器の訓練→予測→評価を行います。
+
+3. **結果の集計**: `np.mean()`と`np.std()`で平均と標準偏差を計算します。混同行列は全Foldの予測結果をまとめて計算します。
+
+</details>
+
 ### 課題2: 特徴量抽出の実装
 
 `classifier.py`の`_extract_features`メソッドに追加の特徴量を実装してください。
@@ -28,6 +78,91 @@
 参考:
 - OpenCV公式ドキュメント: https://docs.opencv.org/4.x/
 - 画像処理チュートリアル: https://docs.opencv.org/4.x/d2/d96/tutorial_py_table_of_contents_imgproc.html
+
+<details>
+<summary>💡 解答例と解説（クリックで展開）</summary>
+
+#### 追加する特徴量
+
+| カテゴリ | 特徴量 | 次元数 | 説明 |
+|---------|--------|--------|------|
+| テクスチャ | LBPヒストグラム | 16 | 局所的なテクスチャパターン |
+| テクスチャ | Gaborフィルタ | 16 | 方向・スケール別のテクスチャ |
+| エッジ | Canny密度 | 1 | エッジの密度 |
+| エッジ | 勾配統計 | 3 | 勾配の平均・標準偏差・Laplacian分散 |
+| エッジ | 方向ヒストグラム | 8 | 勾配方向の分布 |
+| 統計 | 基本統計量 | 6 | 平均、標準偏差、レンジ、エントロピー、歪度、尖度 |
+| 統計 | パーセンタイル | 5 | 10%, 25%, 50%, 75%, 90% |
+
+#### 実装例
+
+```python
+# テクスチャ特徴量（LBP）
+# 各ピクセルの周囲8近傍と比較してパターンをエンコード
+padded = cv2.copyMakeBorder(gray, 1, 1, 1, 1, cv2.BORDER_REFLECT)
+h, w = gray.shape
+lbp = np.zeros((h, w), dtype=np.uint8)
+for i in range(8):
+    angle = i * np.pi / 4
+    dy, dx = int(np.round(np.sin(angle))), int(np.round(np.cos(angle)))
+    neighbor = padded[1 + dy:h + 1 + dy, 1 + dx:w + 1 + dx]
+    lbp += ((neighbor >= gray).astype(np.uint8) << i)
+hist, _ = np.histogram(lbp.ravel(), bins=16, range=(0, 256))
+features.extend((hist / (hist.sum() + 1e-7)).tolist())
+
+# Gaborフィルタ（4方向 × 2スケール）
+for theta in [0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]:
+    for sigma in [3.0, 5.0]:
+        kernel = cv2.getGaborKernel((21, 21), sigma, theta, 10.0, 0.5, 0)
+        filtered = cv2.filter2D(gray, cv2.CV_64F, kernel)
+        features.extend([filtered.mean(), filtered.std()])
+
+# エッジ特徴量
+edges = cv2.Canny(gray, 50, 150)
+edge_density = edges.sum() / (edges.shape[0] * edges.shape[1] * 255)
+
+sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+gradient = np.sqrt(sobel_x ** 2 + sobel_y ** 2)
+direction = np.arctan2(sobel_y, sobel_x)
+
+dir_hist, _ = np.histogram(direction.ravel(), bins=8, range=(-np.pi, np.pi))
+dir_hist = dir_hist / (dir_hist.sum() + 1e-7)
+
+laplacian_var = cv2.Laplacian(gray, cv2.CV_64F).var() / 1000
+features.extend([edge_density, gradient.mean(), gradient.std(), laplacian_var])
+features.extend(dir_hist.tolist())
+
+# 統計的特徴量
+mean, std = gray.mean(), gray.std()
+hist, _ = np.histogram(gray.ravel(), bins=256, range=(0, 256))
+hist = hist / (hist.sum() + 1e-7)
+entropy = -np.sum(hist * np.log2(hist + 1e-7))
+
+centered = gray.astype(np.float64) - mean
+skewness = np.mean(centered ** 3) / (std ** 3 + 1e-7)
+kurtosis = np.mean(centered ** 4) / (std ** 4 + 1e-7) - 3
+
+percentiles = np.percentile(gray.ravel(), [10, 25, 50, 75, 90]) / 255
+
+features.extend([mean / 255, std / 255, (gray.max() - gray.min()) / 255,
+                 entropy / 8, skewness, kurtosis])
+features.extend(percentiles.tolist())
+```
+
+#### 解説
+
+1. **LBP (Local Binary Pattern)**: 各ピクセルの周囲8近傍と中心ピクセルを比較し、大きければ1、小さければ0としてビットパターンを作成します。テクスチャの局所的なパターンを捉えるのに有効です。
+
+2. **Gaborフィルタ**: 特定の方向と周波数に反応するフィルタです。異なる方向（0°, 45°, 90°, 135°）とスケール（σ=3, 5）で適用し、雪片の複雑な模様を検出します。
+
+3. **Cannyエッジ検出**: エッジを検出し、その密度を計算します。雪片はエッジが多く、霰はエッジが少ない傾向があります。
+
+4. **Sobelフィルタ**: x方向とy方向の勾配を計算し、勾配の強度と方向を求めます。方向のヒストグラムは、雪片の六角形パターンを捉えるのに役立ちます。
+
+5. **統計的特徴量**: 画像の明るさの分布を表す指標です。エントロピーは情報量、歪度・尖度は分布の形状を表します。
+
+</details>
 
 
 ## このプロジェクトについて

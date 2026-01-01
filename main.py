@@ -13,7 +13,10 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+
+from classifier import SnowCrystalClassifier
 
 
 
@@ -88,19 +91,54 @@ def run_cross_validation(X, y, n_folds=5, random_seed=42):
         mean_metrics: 平均評価指標 (dict)
         std_metrics: 標準偏差 (dict)
     """
-    # ========================================
-    # TODO: クロスバリデーションを実装してください
-    # ========================================
-    # ヒント:
-    # - StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_seed)
-    # - skf.split(X, y) で (train_idx, test_idx) のペアが得られる
-    # - X[train_idx], y[train_idx] で訓練データを取得
-    # - SnowCrystalClassifier(random_state=random_seed) で分類器を作成
-    # - clf.fit(X_train, y_train) で訓練
-    # - clf.predict(X_test) で予測
-    # - compute_metrics(y_test, y_pred) で評価
+    # StratifiedKFoldでデータを分割（クラス比率を維持）
+    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=random_seed)
 
-    raise NotImplementedError("この関数を実装してください")
+    # 各Foldの評価結果を保存するリスト
+    fold_metrics = []
+    # 全Foldの予測結果を保存（混同行列用）
+    all_preds = []
+    all_labels = []
+
+    # 各Foldで訓練と評価を実行
+    for fold_idx, (train_idx, test_idx) in enumerate(skf.split(X, y)):
+        # 訓練データとテストデータに分割
+        X_train, X_test = X[train_idx], X[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+
+        # 分類器を作成して訓練
+        clf = SnowCrystalClassifier(random_state=random_seed)
+        clf.fit(X_train, y_train)
+
+        # テストデータで予測
+        y_pred = clf.predict(X_test)
+
+        # 評価指標を計算
+        metrics = compute_metrics(y_test, y_pred)
+        fold_metrics.append(metrics)
+
+        # 全予測結果を保存
+        all_preds.extend(y_pred)
+        all_labels.extend(y_test)
+
+        print(f"  Fold {fold_idx + 1}/{n_folds} - Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}")
+
+    # 平均と標準偏差を計算
+    mean_metrics = {
+        "accuracy": np.mean([m["accuracy"] for m in fold_metrics]),
+        "precision": np.mean([m["precision"] for m in fold_metrics]),
+        "recall": np.mean([m["recall"] for m in fold_metrics]),
+        "f1": np.mean([m["f1"] for m in fold_metrics]),
+        "confusion_matrix": confusion_matrix(all_labels, all_preds),
+    }
+    std_metrics = {
+        "accuracy": np.std([m["accuracy"] for m in fold_metrics]),
+        "precision": np.std([m["precision"] for m in fold_metrics]),
+        "recall": np.std([m["recall"] for m in fold_metrics]),
+        "f1": np.std([m["f1"] for m in fold_metrics]),
+    }
+
+    return mean_metrics, std_metrics
 
 
 def plot_confusion_matrix(metrics, class_names, output_path):
