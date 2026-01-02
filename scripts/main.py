@@ -175,39 +175,6 @@ def plot_confusion_matrix(
     print(f"  Saved: {output_path}")
 
 
-def plot_metrics(
-    metrics: dict[str, float | np.ndarray],
-    std: dict[str, float],
-    output_path: Path,
-) -> None:
-    """メトリクスをプロットする"""
-    names = ["Accuracy", "Precision", "Recall", "F1"]
-    values: list[float] = [
-        float(metrics["accuracy"]),
-        float(metrics["precision"]),
-        float(metrics["recall"]),
-        float(metrics["f1"]),
-    ]
-    errors = [std["accuracy"], std["precision"], std["recall"], std["f1"]]
-    colors = ["#2ecc71", "#3498db", "#e74c3c", "#9b59b6"]
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-    bars = ax.bar(names, values, color=colors, yerr=errors, capsize=5)
-    ax.set_ylim(0, 1.1)
-    ax.set_ylabel("Score")
-    ax.set_title("RandomForest Classifier Performance (5-Fold CV)")
-    ax.grid(axis="y", alpha=0.3)
-
-    for bar, val in zip(bars, values):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
-                f"{val:.3f}", ha="center", fontsize=10)
-
-    plt.tight_layout()
-    plt.savefig(output_path, dpi=150)
-    plt.close()
-    print(f"  Saved: {output_path}")
-
-
 def save_results_csv(
     metrics: dict[str, float | np.ndarray],
     std: dict[str, float],
@@ -263,7 +230,6 @@ def main(
     # 保存
     print("\nSaving results...")
     plot_confusion_matrix(metrics, class_names, output_dir / "confusion_matrix.png")
-    plot_metrics(metrics, std, output_dir / "metrics.png")
     save_results_csv(metrics, std, output_dir / "results.csv")
 
     print("\nDone!")
