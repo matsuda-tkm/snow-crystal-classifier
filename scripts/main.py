@@ -81,44 +81,53 @@ def run_cross_validation(
 
     # 各Foldで訓練と評価を実行
     for fold_idx, (train_idx, test_idx) in enumerate(skf.split(images, labels)):
-        # 訓練データとテストデータに分割
-        images_train = [images[i] for i in train_idx]
-        images_test = [images[i] for i in test_idx]
-        labels_train, labels_test = labels[train_idx], labels[test_idx]
+        # TODO: 以下を実装してください
+        
+        # ヒント1: 訓練データとテストデータに分割
+        # images_train = [images[i] for i in train_idx]
+        # images_test = [images[i] for i in test_idx]
+        # labels_train, labels_test = labels[train_idx], labels[test_idx]
 
-        # 分類器を作成して訓練
-        clf = SnowCrystalClassifier(random_state=random_seed)
-        clf.fit(images_train, labels_train)
+        # ヒント2: 分類器を作成して訓練
+        # clf = SnowCrystalClassifier(random_state=random_seed)
+        # clf.fit(images_train, labels_train)
 
-        # テストデータで予測
-        labels_pred = clf.predict(images_test)
+        # ヒント3: テストデータで予測
+        # labels_pred = clf.predict(images_test)
 
-        # 評価指標を計算
-        metrics = compute_metrics(labels_test, labels_pred)
-        fold_metrics.append(metrics)
+        # ヒント4: 評価指標を計算
+        # metrics = compute_metrics(labels_test, labels_pred)
+        # fold_metrics.append(metrics)
 
-        # 全予測結果を保存
-        all_preds.extend(labels_pred)
-        all_labels.extend(labels_test)
+        # ヒント5: 全予測結果を保存（混同行列の計算用）
+        # all_preds.extend(labels_pred)
+        # all_labels.extend(labels_test)
 
-        print(f"  Fold {fold_idx + 1}/{n_folds} - Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}")
+        # ヒント6: 進捗を表示
+        # print(f"  Fold {fold_idx + 1}/{n_folds} - Accuracy: {metrics['accuracy']:.4f}, F1: {metrics['f1']:.4f}")
+        pass
 
-    # 平均と標準偏差を計算
-    mean_metrics = {
-        "accuracy": np.mean([m["accuracy"] for m in fold_metrics]),
-        "precision": np.mean([m["precision"] for m in fold_metrics]),
-        "recall": np.mean([m["recall"] for m in fold_metrics]),
-        "f1": np.mean([m["f1"] for m in fold_metrics]),
-        "confusion_matrix": confusion_matrix(all_labels, all_preds),
-    }
-    std_metrics: dict[str, float] = {
-        "accuracy": float(np.std([m["accuracy"] for m in fold_metrics])),
-        "precision": float(np.std([m["precision"] for m in fold_metrics])),
-        "recall": float(np.std([m["recall"] for m in fold_metrics])),
-        "f1": float(np.std([m["f1"] for m in fold_metrics])),
-    }
+    # TODO: 平均と標準偏差を計算してください
+    
+    # ヒント7: 各Foldの結果から平均を計算
+    # mean_metrics = {
+    #     "accuracy": np.mean([m["accuracy"] for m in fold_metrics]),
+    #     "precision": np.mean([m["precision"] for m in fold_metrics]),
+    #     "recall": np.mean([m["recall"] for m in fold_metrics]),
+    #     "f1": np.mean([m["f1"] for m in fold_metrics]),
+    #     "confusion_matrix": confusion_matrix(all_labels, all_preds),
+    # }
+    
+    # ヒント8: 標準偏差を計算
+    # std_metrics: dict[str, float] = {
+    #     "accuracy": float(np.std([m["accuracy"] for m in fold_metrics])),
+    #     "precision": float(np.std([m["precision"] for m in fold_metrics])),
+    #     "recall": float(np.std([m["recall"] for m in fold_metrics])),
+    #     "f1": float(np.std([m["f1"] for m in fold_metrics])),
+    # }
 
-    return mean_metrics, std_metrics
+    # return mean_metrics, std_metrics
+    raise NotImplementedError("この関数を実装してください")
 
 
 def plot_confusion_matrix(
