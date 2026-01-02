@@ -11,7 +11,6 @@ from typing import cast
 
 import cv2
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import StratifiedKFold
@@ -175,26 +174,6 @@ def plot_confusion_matrix(
     print(f"  Saved: {output_path}")
 
 
-def save_results_csv(
-    metrics: dict[str, float | np.ndarray],
-    std: dict[str, float],
-    output_path: Path,
-) -> None:
-    """結果をCSVに保存する"""
-    df = pd.DataFrame([{
-        "accuracy_mean": float(metrics["accuracy"]),
-        "accuracy_std": std["accuracy"],
-        "precision_mean": float(metrics["precision"]),
-        "precision_std": std["precision"],
-        "recall_mean": float(metrics["recall"]),
-        "recall_std": std["recall"],
-        "f1_mean": float(metrics["f1"]),
-        "f1_std": std["f1"],
-    }])
-    df.to_csv(output_path, index=False)
-    print(f"  Saved: {output_path}")
-
-
 def main(
     data_dir: Path,
     output_dir: Path,
@@ -230,7 +209,6 @@ def main(
     # 保存
     print("\nSaving results...")
     plot_confusion_matrix(metrics, class_names, output_dir / "confusion_matrix.png")
-    save_results_csv(metrics, std, output_dir / "results.csv")
 
     print("\nDone!")
 
