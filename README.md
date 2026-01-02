@@ -1,4 +1,4 @@
-# 雪晶分類器 (Snow Crystal Classifier)
+# 機械学習を用いた粒子（霰・雪片）の自動分類
 
 雪の結晶画像から「霰（あられ）」と「雪片」を自動で見分ける機械学習プログラムです。OpenCVで画像から特徴量を抽出し、RandomForestで分類します。
 
@@ -128,7 +128,6 @@ dataset/
 - OpenCV公式ドキュメント: https://docs.opencv.org/4.x/
 - 画像処理チュートリアル: https://docs.opencv.org/4.x/d2/d96/tutorial_py_table_of_contents_imgproc.html
 
-**ヒント**: 特徴量を追加すると、分類精度が向上します。
 
 ### 発展課題: 精度向上への挑戦
 
