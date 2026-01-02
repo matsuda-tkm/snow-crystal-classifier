@@ -47,7 +47,7 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float |
 
 
 def run_cross_validation(
-    images: np.ndarray,
+    images: list[np.ndarray],
     labels: np.ndarray,
     n_folds: int = 5,
     random_seed: int = 42,
@@ -56,8 +56,8 @@ def run_cross_validation(
     クロスバリデーションを実行する
 
     Args:
-        images: 画像データ (N, H, W, C)
-        labels: ラベル (N,)
+        images: 画像データのリスト（各画像は(H, W, C)のRGB画像）
+        labels: ラベル配列 (N,)
         n_folds: 分割数
         random_seed: 乱数シード
 
@@ -82,7 +82,8 @@ def run_cross_validation(
     # 各Foldで訓練と評価を実行
     for fold_idx, (train_idx, test_idx) in enumerate(skf.split(images, labels)):
         # 訓練データとテストデータに分割
-        images_train, images_test = images[train_idx], images[test_idx]
+        images_train = [images[i] for i in train_idx]
+        images_test = [images[i] for i in test_idx]
         labels_train, labels_test = labels[train_idx], labels[test_idx]
 
         # 分類器を作成して訓練
@@ -145,7 +146,6 @@ def main(
     data_dir: Path,
     output_dir: Path,
     n_folds: int,
-    image_size: int,
     seed: int,
 ) -> None:
     """メイン関数"""
@@ -157,7 +157,7 @@ def main(
 
     # データ読み込み
     print("\nLoading data...")
-    images, labels, class_names = load_dataset(data_dir, (image_size, image_size))
+    images, labels, class_names = load_dataset(data_dir)
     print(f"  Samples: {len(images)}, Classes: {dict(zip(class_names, np.bincount(labels)))}")
 
     # クロスバリデーション
@@ -185,8 +185,7 @@ if __name__ == "__main__":
     parser.add_argument("--data-dir", type=str, default="dataset")
     parser.add_argument("--output-dir", type=str, default="output")
     parser.add_argument("--n-folds", type=int, default=5)
-    parser.add_argument("--image-size", type=int, default=128)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    main(Path(args.data_dir), Path(args.output_dir), args.n_folds, args.image_size, args.seed)
+    main(Path(args.data_dir), Path(args.output_dir), args.n_folds, args.seed)

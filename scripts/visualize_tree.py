@@ -16,9 +16,12 @@ from snow_crystal_classifier import SnowCrystalClassifier
 from utils import load_dataset
 
 
-def extract_features(images: np.ndarray) -> tuple[np.ndarray, list[str]]:
+def extract_features(images: list[np.ndarray]) -> tuple[np.ndarray, list[str]]:
     """
     画像から特徴量を抽出する
+    
+    Args:
+        images: 画像データのリスト（各画像は(H, W, C)のRGB画像）
     
     Returns:
         特徴量配列と特徴量名のリスト
@@ -79,7 +82,6 @@ def main(
     data_dir: Path,
     output_dir: Path,
     n_folds: int,
-    image_size: int,
     seed: int,
 ) -> None:
     """メイン関数"""
@@ -91,7 +93,7 @@ def main(
 
     # データ読み込み
     print("\nLoading data...")
-    images, labels, class_names = load_dataset(data_dir, (image_size, image_size))
+    images, labels, class_names = load_dataset(data_dir)
     print(f"  Samples: {len(images)}")
 
     # 特徴量抽出
@@ -101,7 +103,7 @@ def main(
 
     # クロスバリデーション
     tree = DecisionTreeClassifier(
-        max_depth=3,
+        max_depth=7,
         class_weight="balanced",
         random_state=seed,
     )
@@ -128,8 +130,7 @@ if __name__ == "__main__":
     parser.add_argument("--data-dir", type=str, default="dataset")
     parser.add_argument("--output-dir", type=str, default="output")
     parser.add_argument("--n-folds", type=int, default=5)
-    parser.add_argument("--image-size", type=int, default=128)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    main(Path(args.data_dir), Path(args.output_dir), args.n_folds, args.image_size, args.seed)
+    main(Path(args.data_dir), Path(args.output_dir), args.n_folds, args.seed)

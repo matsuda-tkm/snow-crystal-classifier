@@ -31,7 +31,7 @@ class SnowCrystalClassifier:
         モデルを訓練する
 
         Args:
-            X_train: 訓練画像データ (N, H, W, C)
+            X_train: 訓練画像データのリスト（各画像は(H, W, C)のRGB画像）
             y_train: 訓練ラベル (N,)
 
         Returns:
@@ -46,7 +46,7 @@ class SnowCrystalClassifier:
         予測を行う
 
         Args:
-            X: 入力画像データ (N, H, W, C)
+            X: 入力画像データのリスト（各画像は(H, W, C)のRGB画像）
 
         Returns:
             予測ラベル (N,)
@@ -59,7 +59,7 @@ class SnowCrystalClassifier:
         画像から特徴量を抽出する
 
         Args:
-            images: 画像データ (N, H, W, C)
+            images: 画像データのリスト（各画像は(H, W, C)のRGB画像）
 
         Returns:
             特徴量配列 (N, n_features)
