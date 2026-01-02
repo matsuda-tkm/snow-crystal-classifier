@@ -14,12 +14,6 @@ from sklearn.tree import DecisionTreeClassifier, plot_tree, export_text
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.preprocessing import StandardScaler
 
-import sys
-from pathlib import Path
-
-# srcディレクトリをパスに追加
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 from snow_crystal_classifier import SnowCrystalClassifier
 
 
@@ -66,7 +60,13 @@ def extract_features(images: np.ndarray) -> tuple[np.ndarray, list[str]]:
     return features, feature_names
 
 
-def visualize_tree(tree: DecisionTreeClassifier, feature_names: list[str], class_names: list[str], output_path: Path, max_depth: int) -> None:
+def visualize_tree(
+    tree: DecisionTreeClassifier,
+    feature_names: list[str],
+    class_names: list[str],
+    output_path: Path,
+    max_depth: int,
+) -> None:
     """決定木を可視化する"""
     fig, ax = plt.subplots(figsize=(24, 16))
     plot_tree(tree, feature_names=feature_names, class_names=class_names,
@@ -78,7 +78,12 @@ def visualize_tree(tree: DecisionTreeClassifier, feature_names: list[str], class
     print(f"  Saved: {output_path}")
 
 
-def visualize_importance(tree: DecisionTreeClassifier, feature_names: list[str], output_path: Path, top_n: int = 20) -> None:
+def visualize_importance(
+    tree: DecisionTreeClassifier,
+    feature_names: list[str],
+    output_path: Path,
+    top_n: int = 20,
+) -> None:
     """特徴量の重要度を可視化する"""
     importances = tree.feature_importances_
     indices = np.argsort(importances)[::-1][:top_n]
@@ -97,7 +102,14 @@ def visualize_importance(tree: DecisionTreeClassifier, feature_names: list[str],
     print(f"  Saved: {output_path}")
 
 
-def main(data_dir: Path, output_dir: Path, max_depth: int, n_folds: int, image_size: int, seed: int) -> None:
+def main(
+    data_dir: Path,
+    output_dir: Path,
+    max_depth: int,
+    n_folds: int,
+    image_size: int,
+    seed: int,
+) -> None:
     """メイン関数"""
     print("=" * 60)
     print("決定木分類器の訓練と可視化")

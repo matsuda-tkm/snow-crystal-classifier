@@ -7,6 +7,7 @@ OpenCV特徴量ベース雪晶分類器のクロスバリデーション評価
 
 import argparse
 from pathlib import Path
+from typing import cast
 
 import cv2
 import numpy as np
@@ -14,19 +15,20 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.model_selection import StratifiedKFold
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix,
+)
 
-import sys
-from pathlib import Path
-
-# srcディレクトリをパスに追加
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from snow_crystal_classifier import SnowCrystalClassifier
 
 
 
-def resize_with_padding(image, target_size):
+def resize_with_padding(image: np.ndarray, target_size: tuple[int, int]) -> np.ndarray:
     """アスペクト比を維持しながらパディングでサイズを揃える"""
     h, w = image.shape[:2]
     target_h, target_w = target_size
@@ -40,7 +42,7 @@ def resize_with_padding(image, target_size):
     return padded
 
 
-def load_dataset(data_dir, image_size):
+def load_dataset(data_dir: Path, image_size: tuple[int, int]) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """データセットを読み込む"""
     class_names = ["graupel", "snowflake"]
     images, labels = [], []
@@ -57,7 +59,7 @@ def load_dataset(data_dir, image_size):
     return np.array(images), np.array(labels), class_names
 
 
-def compute_metrics(y_true, y_pred):
+def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float | np.ndarray]:
     """
     評価メトリクスを計算する
 
@@ -78,7 +80,12 @@ def compute_metrics(y_true, y_pred):
     }
 
 
-def run_cross_validation(X, y, n_folds=5, random_seed=42):
+def run_cross_validation(
+    X: np.ndarray,
+    y: np.ndarray,
+    n_folds: int = 5,
+    random_seed: int = 42,
+) -> tuple[dict[str, float | np.ndarray], dict[str, float]]:
     """
     クロスバリデーションを実行する
 
@@ -137,21 +144,26 @@ def run_cross_validation(X, y, n_folds=5, random_seed=42):
         "f1": np.mean([m["f1"] for m in fold_metrics]),
         "confusion_matrix": confusion_matrix(all_labels, all_preds),
     }
-    std_metrics = {
-        "accuracy": np.std([m["accuracy"] for m in fold_metrics]),
-        "precision": np.std([m["precision"] for m in fold_metrics]),
-        "recall": np.std([m["recall"] for m in fold_metrics]),
-        "f1": np.std([m["f1"] for m in fold_metrics]),
+    std_metrics: dict[str, float] = {
+        "accuracy": float(np.std([m["accuracy"] for m in fold_metrics])),
+        "precision": float(np.std([m["precision"] for m in fold_metrics])),
+        "recall": float(np.std([m["recall"] for m in fold_metrics])),
+        "f1": float(np.std([m["f1"] for m in fold_metrics])),
     }
 
     return mean_metrics, std_metrics
 
 
-def plot_confusion_matrix(metrics, class_names, output_path):
+def plot_confusion_matrix(
+    metrics: dict[str, float | np.ndarray],
+    class_names: list[str],
+    output_path: Path,
+) -> None:
     """混同行列をプロットする"""
     fig, ax = plt.subplots(figsize=(6, 5))
+    cm: np.ndarray = cast(np.ndarray, metrics["confusion_matrix"])
     sns.heatmap(
-        metrics["confusion_matrix"], annot=True, fmt="d", cmap="Blues",
+        cm, annot=True, fmt="d", cmap="Blues",
         xticklabels=class_names, yticklabels=class_names, ax=ax
     )
     ax.set_title(f"Confusion Matrix (Accuracy: {metrics['accuracy']:.3f})")
@@ -163,10 +175,19 @@ def plot_confusion_matrix(metrics, class_names, output_path):
     print(f"  Saved: {output_path}")
 
 
-def plot_metrics(metrics, std, output_path):
+def plot_metrics(
+    metrics: dict[str, float | np.ndarray],
+    std: dict[str, float],
+    output_path: Path,
+) -> None:
     """メトリクスをプロットする"""
     names = ["Accuracy", "Precision", "Recall", "F1"]
-    values = [metrics["accuracy"], metrics["precision"], metrics["recall"], metrics["f1"]]
+    values: list[float] = [
+        float(metrics["accuracy"]),
+        float(metrics["precision"]),
+        float(metrics["recall"]),
+        float(metrics["f1"]),
+    ]
     errors = [std["accuracy"], std["precision"], std["recall"], std["f1"]]
     colors = ["#2ecc71", "#3498db", "#e74c3c", "#9b59b6"]
 
@@ -187,23 +208,33 @@ def plot_metrics(metrics, std, output_path):
     print(f"  Saved: {output_path}")
 
 
-def save_results_csv(metrics, std, output_path):
+def save_results_csv(
+    metrics: dict[str, float | np.ndarray],
+    std: dict[str, float],
+    output_path: Path,
+) -> None:
     """結果をCSVに保存する"""
     df = pd.DataFrame([{
-        "accuracy_mean": metrics["accuracy"],
+        "accuracy_mean": float(metrics["accuracy"]),
         "accuracy_std": std["accuracy"],
-        "precision_mean": metrics["precision"],
+        "precision_mean": float(metrics["precision"]),
         "precision_std": std["precision"],
-        "recall_mean": metrics["recall"],
+        "recall_mean": float(metrics["recall"]),
         "recall_std": std["recall"],
-        "f1_mean": metrics["f1"],
+        "f1_mean": float(metrics["f1"]),
         "f1_std": std["f1"],
     }])
     df.to_csv(output_path, index=False)
     print(f"  Saved: {output_path}")
 
 
-def main(data_dir, output_dir, n_folds, image_size, seed):
+def main(
+    data_dir: Path,
+    output_dir: Path,
+    n_folds: int,
+    image_size: int,
+    seed: int,
+) -> None:
     """メイン関数"""
     print("=" * 60)
     print("OpenCV特徴量ベース雪晶分類器（RandomForest）")

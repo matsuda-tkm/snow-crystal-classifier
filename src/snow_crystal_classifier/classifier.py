@@ -13,7 +13,7 @@ class SnowCrystalClassifier:
     画像から特徴量を抽出し、RandomForestで霰(graupel)と雪片(snowflake)を分類する
     """
 
-    def __init__(self, n_estimators=100, max_depth=10, random_state=42):
+    def __init__(self, n_estimators=100, max_depth=-1, random_state=42):
         """
         Args:
             n_estimators: 決定木の数
@@ -78,7 +78,7 @@ class SnowCrystalClassifier:
             # 特徴量名がまだ生成されていない場合は、ダミー画像で生成
             dummy_image = np.zeros((100, 100, 3), dtype=np.uint8)
             self._extract_features(dummy_image)
-        # この時点でself._feature_namesはNoneではない
+
         assert self._feature_names is not None
         return self._feature_names.copy()
 
